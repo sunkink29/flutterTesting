@@ -9,18 +9,27 @@ class NamedPair {
   NamedPair(this.createrEmail, this.pair);
 }
 
+class RandomWords extends StatefulWidget {
+  final RouteObserver<PageRoute> routeObserver;
+  @override
+  RandomWordsState createState() => RandomWordsState();
+  RandomWords({this.routeObserver});
+}
+
 class RandomWordsState extends State<RandomWords> {
-  final FirebaseUser user;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  FirebaseUser _user;
   final _suggestions = <WordPair>[];
   final _saved = Set<WordPair>();
   final _savedNamed = Set<NamedPair>();
   final _biggerFont = const TextStyle(fontSize: 18.0);
 
-  RandomWordsState({this.user = null});
+  RandomWordsState();
 
   @override
   void initState() {
     super.initState();
+    _auth.currentUser().then((user) => _user = user);
   }
 
   @override
@@ -31,6 +40,18 @@ class RandomWordsState extends State<RandomWords> {
         actions: <Widget>[
           IconButton(icon: Icon(Icons.list), onPressed: _pushSaved),
         ],
+        leading: Builder(
+          builder: (BuildContext context) {
+            return IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                Navigator.maybePop(context);
+                _auth.signOut();
+              },
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+            );
+          },
+        ),
       ),
       body: _buildSuggestions(),
     );
@@ -97,20 +118,13 @@ class RandomWordsState extends State<RandomWords> {
             _saved.remove(pair);
             _savedNamed.removeWhere((namedPair) => namedPair.pair == pair);
           } else {
-            if (user != null) {
+            if (_user != null) {
               _saved.add(pair);
-              _savedNamed.add(NamedPair(user.email, pair));
+              _savedNamed.add(NamedPair(_user.email, pair));
             }
           }
         });
       },
     );
   }
-}
-
-class RandomWords extends StatefulWidget {
-  final user;
-  @override
-  RandomWordsState createState() => RandomWordsState(user: user);
-  RandomWords({this.user = null});
 }

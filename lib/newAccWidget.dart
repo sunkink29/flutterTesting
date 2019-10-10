@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'randomWordsWidget.dart';
 
 class NewAccWidget extends StatefulWidget {
   NewAccState createState() => NewAccState();
 }
 
-FirebaseUser _user;
-
 class NewAccState extends State<NewAccWidget> {
+  final _formKey = GlobalKey<FormState>();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   String email = '';
   String password = '';
-  final _formKey = GlobalKey<FormState>();
 
   @override
   Widget build(BuildContext context) {
@@ -43,33 +41,24 @@ class NewAccState extends State<NewAccWidget> {
                   ),
                   FlatButton(
                     child: Text('Submit'),
-                    onPressed: () => checkCreation(context)
-                        .then((FirebaseUser user) => {})
-                        .catchError((e) => print(e)),
+                    onPressed: () =>
+                        checkCreation(context).catchError((e) => print(e)),
                   ),
                 ],
               ),
             )));
   }
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
   Future<FirebaseUser> checkCreation(BuildContext context) async {
     if (_formKey.currentState.validate()) {
       _formKey.currentState.save();
 
       final FirebaseUser user = (await _auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    ))
-        .user;
-      if (user != null) {
-        _user = user;
-        Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => RandomWords(user: _user)));
-        print("signed in " + user.email);
-      } else {
-        print("error");
-      }
+        email: email,
+        password: password,
+      ))
+          .user;
+      Navigator.of(context).pop();
       return user;
     }
     return null;
