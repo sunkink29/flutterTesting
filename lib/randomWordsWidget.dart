@@ -45,8 +45,8 @@ class RandomWordsState extends State<RandomWords> {
             return IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
-                Navigator.maybePop(context);
                 _auth.signOut();
+                Navigator.maybePop(context);
               },
               tooltip: MaterialLocalizations.of(context).backButtonTooltip,
             );
