@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:english_words/english_words.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class NamedPair {
   String createrName;
@@ -20,8 +21,8 @@ class RandomWordsState extends State<RandomWords> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   FirebaseUser _user;
   final _suggestions = <WordPair>[];
-  final _saved = Set<WordPair>();
-  final _savedNamed = Set<NamedPair>();
+  final _saved =
+      Map<String, String>(); // a map of documentIDs with the pair as the key
   final _biggerFont = const TextStyle(fontSize: 18.0);
 
   RandomWordsState();
@@ -60,29 +61,54 @@ class RandomWordsState extends State<RandomWords> {
   void _pushSaved() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) {
-          final Iterable<ListTile> tiles = _savedNamed.map(
-            (NamedPair pair) {
-              return ListTile(
-                title: Text(
-                  pair.pair.asPascalCase,
-                  style: _biggerFont,
-                ),
-                subtitle: Text(pair.createrEmail),
-              );
-            },
-          );
-          final List<Widget> divided = ListTile.divideTiles(
-            context: context,
-            tiles: tiles,
-          ).toList();
-          return Scaffold(
-            appBar: AppBar(
-              title: Text('Saved Suggestions'),
-            ),
-            body: ListView(children: divided),
-          );
-        },
+        builder: (BuildContext context) => StreamBuilder<QuerySnapshot>(
+          stream: Firestore.instance.collection('wordPairs').snapshots(),
+          builder:
+              (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
+            if (snapshot.hasError) return new Text('Error: ${snapshot.error}');
+            Iterable<ListTile> tiles;
+            switch (snapshot.connectionState) {
+              case ConnectionState.waiting:
+                return Scaffold(
+                  appBar: AppBar(
+                    title: Text('Saved Suggestions'),
+                  ),
+                  body: Text('Loading...'),
+                );
+                break;
+              default:
+                tiles = snapshot.data.documents.map(
+                  (DocumentSnapshot document) {
+                    return ListTile(
+                      title: Text(
+                        document['wordPair'].toString(),
+                        style: _biggerFont,
+                      ),
+                      subtitle: Text(document['email']),
+                      onTap: () async {
+                        _saved.remove(document['wordPair'].toString());
+                        await Firestore.instance
+                            .collection('wordPairs')
+                            .document(document.documentID)
+                            .delete()
+                            .catchError((e) => print(e.toString()));
+                      },
+                    );
+                  },
+                );
+            }
+            final List<Widget> divided = ListTile.divideTiles(
+              context: context,
+              tiles: tiles,
+            ).toList();
+            return Scaffold(
+              appBar: AppBar(
+                title: Text('Saved Suggestions'),
+              ),
+              body: ListView(children: divided),
+            );
+          },
+        ),
       ),
     );
   }
@@ -95,14 +121,28 @@ class RandomWordsState extends State<RandomWords> {
 
           final index = i ~/ 2;
           if (index >= _suggestions.length) {
-            _suggestions.addAll(generateWordPairs().take(10)); /*4*/
+            _suggestions.addAll(generateWordPairs().take(10));
           }
           return _buildRow(_suggestions[index]);
         });
   }
 
   Widget _buildRow(WordPair pair) {
-    final bool alreadySaved = _saved.contains(pair);
+    String docID;
+    // Firestore.instance
+    //     .collection('wordPairs')
+    //     .where('wordPair', isEqualTo: pair.asPascalCase)
+    //     .snapshots()
+    //     .first
+    //     .catchError((e) {})
+    //     .then((val) => this.setState(() {
+    //           _saved[pair.asPascalCase] =
+    //               val.documents.isNotEmpty ? val.documents[0].documentID : null;
+    //         }));
+    final bool alreadySaved = _saved.keys.contains(pair.asPascalCase);
+    if (alreadySaved) {
+      docID = _saved[pair.asPascalCase];
+    }
     return ListTile(
       title: Text(
         pair.asPascalCase,
@@ -115,12 +155,18 @@ class RandomWordsState extends State<RandomWords> {
       onTap: () {
         setState(() {
           if (alreadySaved) {
-            _saved.remove(pair);
-            _savedNamed.removeWhere((namedPair) => namedPair.pair == pair);
+            Firestore.instance.collection('wordPairs').document(docID).delete();
+            _saved.remove(pair.asPascalCase);
           } else {
             if (_user != null) {
-              _saved.add(pair);
-              _savedNamed.add(NamedPair(_user.email, pair));
+              DocumentReference doc =
+                  Firestore.instance.collection('wordPairs').document();
+              _saved[pair.asPascalCase] = doc.documentID;
+              doc.setData({
+                'email': _user.email,
+                'uid': _user.uid,
+                'wordPair': pair.asPascalCase
+              });
             }
           }
         });
